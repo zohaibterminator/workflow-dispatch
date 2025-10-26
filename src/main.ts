@@ -46,8 +46,6 @@ async function run(): Promise<void> {
       octokit.rest.actions.listRepoWorkflows.endpoint.merge({
         owner,
         repo,
-        ref,
-        inputs,
       }),
     )
 
@@ -61,9 +59,9 @@ async function run(): Promise<void> {
       return (
         workflow.name === workflowRef ||
         workflow.id.toString() === workflowRef ||
-        workflow.path.endsWith(`/${workflowRef}`) || // Add a leading / to avoid matching workflow with same suffix
+        workflow.path.endsWith(`/${workflowRef}`) ||
         workflow.path == workflowRef
-      ) // Or it stays in top level directory
+      )
     })
 
     if (!foundWorkflow) throw new Error(`Unable to find workflow '${workflowRef}' in ${owner}/${repo} 😥`)
@@ -82,6 +80,57 @@ async function run(): Promise<void> {
 
     core.info(`🏆 API response status: ${dispatchResp.status}`)
     core.setOutput('workflowId', foundWorkflow.id)
+
+    // Wait for the workflow to start (it might take a few seconds)
+    console.log('⌛ Waiting for workflow run to start...')
+    let workflowRun = null
+    let attempts = 0
+    const maxAttempts = 30 // 30 attempts * 2 second delay = 60 seconds max wait time
+
+    while (!workflowRun && attempts < maxAttempts) {
+      const runsResponse = await octokit.rest.actions.listWorkflowRuns({
+        owner,
+        repo,
+        workflow_id: foundWorkflow.id,
+        branch: ref.replace('refs/heads/', ''),
+        per_page: 1,
+      })
+
+      const latestRun = runsResponse.data.workflow_runs[0]
+      if (latestRun && new Date(latestRun.created_at) > new Date(Date.now() - 60000)) {
+        workflowRun = latestRun
+        console.log(`📋 Workflow run started with ID: ${workflowRun.id}`)
+      } else {
+        await new Promise(resolve => setTimeout(resolve, 2000)) // Wait 2 seconds before checking again
+        attempts++
+      }
+    }
+
+    if (!workflowRun) {
+      throw new Error('Timed out waiting for workflow run to start')
+    }
+
+    // Wait for the workflow run to complete
+    console.log('⏳ Waiting for workflow run to complete...')
+    while (workflowRun.status !== 'completed') {
+      const runResponse: any = await octokit.rest.actions.getWorkflowRun({
+        owner,
+        repo,
+        run_id: workflowRun.id,
+      })
+      workflowRun = runResponse.data
+
+      if (workflowRun.status !== 'completed') {
+        await new Promise(resolve => setTimeout(resolve, 5000)) // Check every 5 seconds
+      }
+    }
+
+    // Set outputs for the workflow run status and conclusion
+    core.setOutput('workflow_run_id', workflowRun.id)
+    core.setOutput('workflow_run_status', workflowRun.status)
+    core.setOutput('workflow_run_conclusion', workflowRun.conclusion)
+    console.log(`✨ Workflow run completed with conclusion: ${workflowRun.conclusion}`)
+
   } catch (error) {
     const e = error as Error
 
