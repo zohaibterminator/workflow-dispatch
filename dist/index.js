@@ -2371,7 +2371,7 @@ module.exports = __toCommonJS(dist_src_exports);
 var import_universal_user_agent = __nccwpck_require__(5030);
 
 // pkg/dist-src/version.js
-var VERSION = "9.0.5";
+var VERSION = "9.0.6";
 
 // pkg/dist-src/defaults.js
 var userAgent = `octokit-endpoint.js/${VERSION} ${(0, import_universal_user_agent.getUserAgent)()}`;
@@ -2476,9 +2476,9 @@ function addQueryParameters(url, parameters) {
 }
 
 // pkg/dist-src/util/extract-url-variable-names.js
-var urlVariableRegex = /\{[^}]+\}/g;
+var urlVariableRegex = /\{[^{}}]+\}/g;
 function removeNonChars(variableName) {
-  return variableName.replace(/^\W+|\W+$/g, "").split(/,/);
+  return variableName.replace(/(?:^\W+)|(?:(?<!\W)\W+$)/g, "").split(/,/);
 }
 function extractUrlVariableNames(url) {
   const matches = url.match(urlVariableRegex);
@@ -2664,7 +2664,7 @@ function parse(options) {
     }
     if (url.endsWith("/graphql")) {
       if (options.mediaType.previews?.length) {
-        const previewsFromAcceptHeader = headers.accept.match(/[\w-]+(?=-preview)/g) || [];
+        const previewsFromAcceptHeader = headers.accept.match(/(?<![\w-])[\w-]+(?=-preview)/g) || [];
         headers.accept = previewsFromAcceptHeader.concat(options.mediaType.previews).map((preview) => {
           const format = options.mediaType.format ? `.${options.mediaType.format}` : "+json";
           return `application/vnd.github.${preview}-preview${format}`;
@@ -2913,7 +2913,7 @@ __export(dist_src_exports, {
 module.exports = __toCommonJS(dist_src_exports);
 
 // pkg/dist-src/version.js
-var VERSION = "9.2.1";
+var VERSION = "9.2.2";
 
 // pkg/dist-src/normalize-paginated-list-response.js
 function normalizePaginatedListResponse(response) {
@@ -2961,7 +2961,7 @@ function iterator(octokit, route, parameters) {
           const response = await requestMethod({ method, url, headers });
           const normalizedResponse = normalizePaginatedListResponse(response);
           url = ((normalizedResponse.headers.link || "").match(
-            /<([^>]+)>;\s*rel="next"/
+            /<([^<>]+)>;\s*rel="next"/
           ) || [])[1];
           return { value: normalizedResponse };
         } catch (error) {
@@ -5513,7 +5513,7 @@ var RequestError = class extends Error {
     if (options.request.headers.authorization) {
       requestCopy.headers = Object.assign({}, options.request.headers, {
         authorization: options.request.headers.authorization.replace(
-          / .*$/,
+          /(?<! ) .*$/,
           " [REDACTED]"
         )
       });
@@ -5581,7 +5581,7 @@ var import_endpoint = __nccwpck_require__(9440);
 var import_universal_user_agent = __nccwpck_require__(5030);
 
 // pkg/dist-src/version.js
-var VERSION = "8.4.0";
+var VERSION = "8.4.1";
 
 // pkg/dist-src/is-plain-object.js
 function isPlainObject(value) {
@@ -5640,7 +5640,7 @@ function fetchWrapper(requestOptions) {
       headers[keyAndValue[0]] = keyAndValue[1];
     }
     if ("deprecation" in headers) {
-      const matches = headers.link && headers.link.match(/<([^>]+)>; rel="deprecation"/);
+      const matches = headers.link && headers.link.match(/<([^<>]+)>; rel="deprecation"/);
       const deprecationLink = matches && matches.pop();
       log.warn(
         `[@octokit/request] "${requestOptions.method} ${requestOptions.url}" is deprecated. It is scheduled to be removed on ${headers.sunset}${deprecationLink ? `. See ${deprecationLink}` : ""}`
@@ -11644,7 +11644,7 @@ module.exports = {
 
 
 const { parseSetCookie } = __nccwpck_require__(4408)
-const { stringify, getHeadersList } = __nccwpck_require__(3121)
+const { stringify } = __nccwpck_require__(3121)
 const { webidl } = __nccwpck_require__(1744)
 const { Headers } = __nccwpck_require__(554)
 
@@ -11720,14 +11720,13 @@ function getSetCookies (headers) {
 
   webidl.brandCheck(headers, Headers, { strict: false })
 
-  const cookies = getHeadersList(headers).cookies
+  const cookies = headers.getSetCookie()
 
   if (!cookies) {
     return []
   }
 
-  // In older versions of undici, cookies is a list of name:value.
-  return cookies.map((pair) => parseSetCookie(Array.isArray(pair) ? pair[1] : pair))
+  return cookies.map((pair) => parseSetCookie(pair))
 }
 
 /**
@@ -12155,14 +12154,15 @@ module.exports = {
 /***/ }),
 
 /***/ 3121:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+/***/ ((module) => {
 
 "use strict";
 
 
-const assert = __nccwpck_require__(9491)
-const { kHeadersList } = __nccwpck_require__(2785)
-
+/**
+ * @param {string} value
+ * @returns {boolean}
+ */
 function isCTLExcludingHtab (value) {
   if (value.length === 0) {
     return false
@@ -12423,31 +12423,13 @@ function stringify (cookie) {
   return out.join('; ')
 }
 
-let kHeadersListNode
-
-function getHeadersList (headers) {
-  if (headers[kHeadersList]) {
-    return headers[kHeadersList]
-  }
-
-  if (!kHeadersListNode) {
-    kHeadersListNode = Object.getOwnPropertySymbols(headers).find(
-      (symbol) => symbol.description === 'headers list'
-    )
-
-    assert(kHeadersListNode, 'Headers cannot be parsed')
-  }
-
-  const headersList = headers[kHeadersListNode]
-  assert(headersList)
-
-  return headersList
-}
-
 module.exports = {
   isCTLExcludingHtab,
-  stringify,
-  getHeadersList
+  validateCookieName,
+  validateCookiePath,
+  validateCookieValue,
+  toIMFDate,
+  stringify
 }
 
 
@@ -14376,6 +14358,14 @@ const { isUint8Array, isArrayBuffer } = __nccwpck_require__(9830)
 const { File: UndiciFile } = __nccwpck_require__(8511)
 const { parseMIMEType, serializeAMimeType } = __nccwpck_require__(685)
 
+let random
+try {
+  const crypto = __nccwpck_require__(6005)
+  random = (max) => crypto.randomInt(0, max)
+} catch {
+  random = (max) => Math.floor(Math.random(max))
+}
+
 let ReadableStream = globalThis.ReadableStream
 
 /** @type {globalThis['File']} */
@@ -14461,7 +14451,7 @@ function extractBody (object, keepalive = false) {
     // Set source to a copy of the bytes held by object.
     source = new Uint8Array(object.buffer.slice(object.byteOffset, object.byteOffset + object.byteLength))
   } else if (util.isFormDataLike(object)) {
-    const boundary = `----formdata-undici-0${`${Math.floor(Math.random() * 1e11)}`.padStart(11, '0')}`
+    const boundary = `----formdata-undici-0${`${random(1e11)}`.padStart(11, '0')}`
     const prefix = `--${boundary}\r\nContent-Disposition: form-data`
 
     /*! formdata-polyfill. MIT License. Jimmy Wärting <https://jimmy.warting.se/opensource> */
@@ -16443,6 +16433,7 @@ const {
   isValidHeaderName,
   isValidHeaderValue
 } = __nccwpck_require__(2538)
+const util = __nccwpck_require__(3837)
 const { webidl } = __nccwpck_require__(1744)
 const assert = __nccwpck_require__(9491)
 
@@ -16996,6 +16987,9 @@ Object.defineProperties(Headers.prototype, {
   [Symbol.toStringTag]: {
     value: 'Headers',
     configurable: true
+  },
+  [util.inspect.custom]: {
+    enumerable: false
   }
 })
 
@@ -26172,6 +26166,20 @@ class Pool extends PoolBase {
       ? { ...options.interceptors }
       : undefined
     this[kFactory] = factory
+
+    this.on('connectionError', (origin, targets, error) => {
+      // If a connection error occurs, we remove the client from the pool,
+      // and emit a connectionError event. They will not be re-used.
+      // Fixes https://github.com/nodejs/undici/issues/3895
+      for (const target of targets) {
+        // Do not use kRemoveClient here, as it will close the client,
+        // but the client cannot be closed in this state.
+        const idx = this[kClients].indexOf(target)
+        if (idx !== -1) {
+          this[kClients].splice(idx, 1)
+        }
+      }
+    })
   }
 
   [kGetDispatcher] () {
@@ -29193,12 +29201,6 @@ function wrappy (fn, cb) {
 
 "use strict";
 
-// ----------------------------------------------------------------------------
-// Copyright (c) Ben Coleman, 2020
-// Licensed under the MIT License.
-//
-// Workflow Dispatch Action - Main task code
-// ----------------------------------------------------------------------------
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -29235,100 +29237,91 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(2186));
 const github = __importStar(__nccwpck_require__(5438));
 const PackageJSON = __importStar(__nccwpck_require__(4147));
-//
-// Main task function (async wrapper)
-//
+function triggerAndWaitForWorkflow(octokit, owner, repo, workflowRef, ref, inputs) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const workflows = yield octokit.paginate(octokit.rest.actions.listRepoWorkflows.endpoint.merge({ owner, repo }));
+        const foundWorkflow = workflows.find((w) => w.name === workflowRef ||
+            w.id.toString() === workflowRef ||
+            w.path.endsWith(`/${workflowRef}`) ||
+            w.path === workflowRef);
+        if (!foundWorkflow)
+            throw new Error(`Unable to find workflow '${workflowRef}' in ${owner}/${repo}`);
+        core.info(`Dispatching workflow '${foundWorkflow.name}'...`);
+        yield octokit.request(`POST /repos/${owner}/${repo}/actions/workflows/${foundWorkflow.id}/dispatches`, {
+            ref,
+            inputs,
+        });
+        // Wait until it starts
+        let workflowRun = null;
+        let attempts = 0;
+        while (!workflowRun && attempts < 30) {
+            const runsResponse = yield octokit.rest.actions.listWorkflowRuns({
+                owner,
+                repo,
+                workflow_id: foundWorkflow.id,
+                branch: ref.replace('refs/heads/', ''),
+                per_page: 1,
+            });
+            const latestRun = runsResponse.data.workflow_runs[0];
+            if (latestRun && new Date(latestRun.created_at) > new Date(Date.now() - 60000)) {
+                workflowRun = latestRun;
+            }
+            else {
+                yield new Promise((r) => setTimeout(r, 2000));
+                attempts++;
+            }
+        }
+        if (!workflowRun)
+            throw new Error(`Timed out waiting for ${foundWorkflow.name} to start`);
+        // Wait until it completes
+        while (workflowRun.status !== 'completed') {
+            const runResponse = yield octokit.rest.actions.getWorkflowRun({
+                owner,
+                repo,
+                run_id: workflowRun.id,
+            });
+            workflowRun = runResponse.data;
+            if (workflowRun.status !== 'completed') {
+                yield new Promise((r) => setTimeout(r, 5000));
+            }
+        }
+        core.info(`✅ Workflow '${foundWorkflow.name}' completed with conclusion: ${workflowRun.conclusion}`);
+        return {
+            id: workflowRun.id,
+            name: foundWorkflow.name,
+            status: workflowRun.status,
+            conclusion: workflowRun.conclusion,
+        };
+    });
+}
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
-        core.info(`🏃 Workflow Dispatch Action v${PackageJSON.version}`);
+        core.info(`Workflow Dispatch Action v${PackageJSON.version}`);
         try {
-            // Required inputs
-            const workflowRef = core.getInput('workflow');
-            // Optional inputs, with defaults
+            const workflowInput = core.getInput('workflow'); // Can be one or many
+            const workflowRefs = workflowInput.includes(',')
+                ? workflowInput.split(',').map((s) => s.trim())
+                : [workflowInput];
             const token = core.getInput('token');
             const ref = core.getInput('ref') || github.context.ref;
             const [owner, repo] = core.getInput('repo')
                 ? core.getInput('repo').split('/')
                 : [github.context.repo.owner, github.context.repo.repo];
-            // Decode inputs, this MUST be a valid JSON string
-            let inputs = {};
+            // Parse global or per-workflow inputs
+            let inputsMap = {};
             const inputsJson = core.getInput('inputs');
-            if (inputsJson) {
-                inputs = JSON.parse(inputsJson);
-            }
-            // Get octokit client for making API calls
+            if (inputsJson)
+                inputsMap = JSON.parse(inputsJson);
             const octokit = github.getOctokit(token);
-            // List workflows via API, and handle paginated results
-            const workflows = yield octokit.paginate(octokit.rest.actions.listRepoWorkflows.endpoint.merge({
-                owner,
-                repo,
-            }));
-            // Debug response if ACTIONS_STEP_DEBUG is enabled
-            core.debug('### START List Workflows response data');
-            core.debug(JSON.stringify(workflows, null, 3));
-            core.debug('### END:  List Workflows response data');
-            // Locate workflow either by name, id or filename
-            const foundWorkflow = workflows.find((workflow) => {
-                return (workflow.name === workflowRef ||
-                    workflow.id.toString() === workflowRef ||
-                    workflow.path.endsWith(`/${workflowRef}`) ||
-                    workflow.path == workflowRef);
-            });
-            if (!foundWorkflow)
-                throw new Error(`Unable to find workflow '${workflowRef}' in ${owner}/${repo} 😥`);
-            console.log(`🔎 Found workflow, id: ${foundWorkflow.id}, name: ${foundWorkflow.name}, path: ${foundWorkflow.path}`);
-            // Call workflow_dispatch API
-            console.log('🚀 Calling GitHub API to dispatch workflow...');
-            const dispatchResp = yield octokit.request(`POST /repos/${owner}/${repo}/actions/workflows/${foundWorkflow.id}/dispatches`, {
-                ref: ref,
-                inputs: inputs,
-            });
-            core.info(`🏆 API response status: ${dispatchResp.status}`);
-            core.setOutput('workflowId', foundWorkflow.id);
-            // Wait for the workflow to start (it might take a few seconds)
-            console.log('⌛ Waiting for workflow run to start...');
-            let workflowRun = null;
-            let attempts = 0;
-            const maxAttempts = 30; // 30 attempts * 2 second delay = 60 seconds max wait time
-            while (!workflowRun && attempts < maxAttempts) {
-                const runsResponse = yield octokit.rest.actions.listWorkflowRuns({
-                    owner,
-                    repo,
-                    workflow_id: foundWorkflow.id,
-                    branch: ref.replace('refs/heads/', ''),
-                    per_page: 1,
-                });
-                const latestRun = runsResponse.data.workflow_runs[0];
-                if (latestRun && new Date(latestRun.created_at) > new Date(Date.now() - 60000)) {
-                    workflowRun = latestRun;
-                    console.log(`📋 Workflow run started with ID: ${workflowRun.id}`);
-                }
-                else {
-                    yield new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before checking again
-                    attempts++;
-                }
+            const results = [];
+            for (const wf of workflowRefs) {
+                const wfInputs = typeof inputsMap[wf] === 'object' && inputsMap[wf] !== null
+                    ? inputsMap[wf]
+                    : inputsMap; // fallback to global inputs if none specific
+                const res = yield triggerAndWaitForWorkflow(octokit, owner, repo, wf, ref, wfInputs);
+                results.push(res);
             }
-            if (!workflowRun) {
-                throw new Error('Timed out waiting for workflow run to start');
-            }
-            // Wait for the workflow run to complete
-            console.log('⏳ Waiting for workflow run to complete...');
-            while (workflowRun.status !== 'completed') {
-                const runResponse = yield octokit.rest.actions.getWorkflowRun({
-                    owner,
-                    repo,
-                    run_id: workflowRun.id,
-                });
-                workflowRun = runResponse.data;
-                if (workflowRun.status !== 'completed') {
-                    yield new Promise(resolve => setTimeout(resolve, 5000)); // Check every 5 seconds
-                }
-            }
-            // Set outputs for the workflow run status and conclusion
-            core.setOutput('workflow_run_id', workflowRun.id);
-            core.setOutput('workflow_run_status', workflowRun.status);
-            core.setOutput('workflow_run_conclusion', workflowRun.conclusion);
-            console.log(`✨ Workflow run completed with conclusion: ${workflowRun.conclusion}`);
+            core.setOutput('workflows_results', JSON.stringify(results, null, 2));
         }
         catch (error) {
             const e = error;
@@ -29340,9 +29333,6 @@ function run() {
         }
     });
 }
-//
-// Call the main task run function
-//
 run();
 
 
@@ -29441,6 +29431,14 @@ module.exports = require("https");
 
 "use strict";
 module.exports = require("net");
+
+/***/ }),
+
+/***/ 6005:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:crypto");
 
 /***/ }),
 
