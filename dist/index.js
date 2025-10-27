@@ -29299,6 +29299,7 @@ function run() {
         core.info(`Workflow Dispatch Action v${PackageJSON.version}`);
         try {
             const workflowInput = core.getInput('workflow'); // Can be one or many
+            core.info(`Resolved inputs: ${workflowInput}`);
             const workflowRefs = workflowInput.includes(',')
                 ? workflowInput.split(',').map((s) => s.trim())
                 : [workflowInput];
