@@ -29299,7 +29299,6 @@ function run() {
         core.info(`Workflow Dispatch Action v${PackageJSON.version}`);
         try {
             const workflowInput = core.getInput('workflow'); // Can be one or many
-            core.info(`Resolved inputs: ${workflowInput}`);
             const workflowRefs = workflowInput.includes(',')
                 ? workflowInput.split(',').map((s) => s.trim())
                 : [workflowInput];
@@ -29313,6 +29312,7 @@ function run() {
             const inputsJson = core.getInput('inputs');
             if (inputsJson)
                 inputsMap = JSON.parse(inputsJson);
+            core.info(`Resolved inputs: ${inputsMap}`);
             const octokit = github.getOctokit(token);
             const results = [];
             for (const wf of workflowRefs) {
