@@ -29312,7 +29312,7 @@ function run() {
             const inputsJson = core.getInput('inputs');
             if (inputsJson)
                 inputsMap = JSON.parse(inputsJson);
-            core.info(`Resolved inputs: ${inputsMap}`);
+            core.info(`Resolved inputs: ${JSON.stringify(inputsMap, null, 2)}`);
             const octokit = github.getOctokit(token);
             const results = [];
             for (const wf of workflowRefs) {
